@@ -14,6 +14,7 @@ import json
 import re
 import subprocess
 import sys
+import socket
 
 # python 2.6 support 
 if "check_output" not in dir( subprocess ):
@@ -152,16 +153,16 @@ def populate_chains(dnat_chain, snat_chain, fwd_chain, public_ip, private_ip, do
             # a single integer 80 is equivalent to [80, 80]
             public_port, private_port = ports if isinstance(ports, list) else [
                 ports, ports]
-            dest = "{0}:{1}".format(private_ip, str(private_port))
+            dest = "{0}:{1}".format(socket.gethostbyname(private_ip), str(private_port))
             subprocess.call([IPTABLES_BINARY, "-t", "nat", "-A", dnat_chain, "-p", protocol,
-                             "-d", public_ip, "--dport", str(public_port), "-j", "DNAT", "--to", dest] +
-                            (["-s", source_ip] if source_ip else []))
+                             "-d", socket.gethostbyname(public_ip), "--dport", str(public_port), "-j", "DNAT", "--to", dest] +
+                            (["-s", socket.gethostbyname(source_ip)] if source_ip else []))
             subprocess.call([IPTABLES_BINARY, "-t", "nat", "-A", snat_chain, "-p", protocol,
-                             "-s", private_ip, "-d", private_ip, "--dport", str(public_port), "-j", "MASQUERADE"])
+                             "-s", socket.gethostbyname(private_ip), "-d", socket.gethostbyname(private_ip), "--dport", str(public_port), "-j", "MASQUERADE"])
             interface = ["-o", domain["interface"]
                          ] if "interface" in domain else []
             subprocess.call([IPTABLES_BINARY, "-t", "filter", "-A", fwd_chain, "-p", protocol,
-                             "-d", private_ip, "--dport", str(private_port), "-j", "ACCEPT"] + interface)
+                             "-d", socket.gethostbyname(private_ip), "--dport", str(private_port), "-j", "ACCEPT"] + interface)
 
     # Iterate over all port ranges
     if "port_range" in domain:
@@ -169,27 +170,27 @@ def populate_chains(dnat_chain, snat_chain, fwd_chain, public_ip, private_ip, do
             ports_range = (str(port_range["init_port"]) + ":" +
                            str(port_range["init_port"] + port_range["ports_num"] - 1))
             dest = "{0}:{1}".format(
-                private_ip, ports_range.replace(":", "-", 1))
+                socket.gethostbyname(private_ip), ports_range.replace(":", "-", 1))
             subprocess.call([IPTABLES_BINARY, "-t", "nat", "-A", dnat_chain, "-p", port_range["protocol"],
-                             "-d", public_ip, "--dport", ports_range, "-j", "DNAT", "--to", dest])
+                             "-d", socket.gethostbyname(public_ip), "--dport", ports_range, "-j", "DNAT", "--to", dest])
             subprocess.call([IPTABLES_BINARY, "-t", "nat", "-A", snat_chain, "-p", port_range["protocol"],
-                             "-s", private_ip, "-d", private_ip, "--dport", ports_range, "-j", "MASQUERADE"])
+                             "-s", socket.gethostbyname(private_ip), "-d", socket.gethostbyname(private_ip), "--dport", ports_range, "-j", "MASQUERADE"])
             interface = ["-o", domain["interface"]
                          ] if "interface" in domain else []
             subprocess.call([IPTABLES_BINARY, "-t", "filter", "-A", fwd_chain, "-p", port_range["protocol"],
-                             "-d", private_ip, "--dport", ports_range, "-j", "ACCEPT"] + interface)
+                             "-d", socket.gethostbyname(private_ip), "--dport", ports_range, "-j", "ACCEPT"] + interface)
 
 
 def insert_chains(action, dnat_chain, snat_chain, fwd_chain, public_ip, private_ip):
     """ inserts (action='-I') or removes (action='-D') the custom chains."""
     subprocess.call([IPTABLES_BINARY, "-t", "nat", action,
-                     "OUTPUT", "-d", public_ip, "-j", dnat_chain])
+                     "OUTPUT", "-d", socket.gethostbyname(public_ip), "-j", dnat_chain])
     subprocess.call([IPTABLES_BINARY, "-t", "nat", action,
-                     "PREROUTING", "-d", public_ip, "-j", dnat_chain])
+                     "PREROUTING", "-d", socket.gethostbyname(public_ip), "-j", dnat_chain])
     subprocess.call([IPTABLES_BINARY, "-t", "nat", action, "POSTROUTING",
-                     "-s", private_ip, "-d", private_ip, "-j", snat_chain])
+                     "-s", socket.gethostbyname(private_ip), "-d", socket.gethostbyname(private_ip), "-j", snat_chain])
     subprocess.call([IPTABLES_BINARY, "-t", "filter", action,
-                     "FORWARD", "-d", private_ip, "-j", fwd_chain])
+                     "FORWARD", "-d", socket.gethostbyname(private_ip), "-j", fwd_chain])
 
 # the snat_chain doesn't work unless we turn off filtering bridged packets
 
