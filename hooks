@@ -14,6 +14,7 @@ import json
 import re
 import subprocess
 import sys
+import socket
 
 # python 2.6 support 
 if "check_output" not in dir( subprocess ):
@@ -222,6 +223,18 @@ def stop_forwarding(dnat_chain, snat_chain, fwd_chain, public_ip, private_ip):
     delete_chain("nat", snat_chain)
     delete_chain("filter", fwd_chain)
 
+def resolve(name):
+    """ retry forever, allowing the interface to come up. """
+    if name is None:
+        return None
+    if name.strip() == '':
+        return ''
+    while True:
+        try:
+            return socket.gethostbyname(name)
+        except socket.herror:
+            pass
+
 def main():
     """
     do the UNIX double-fork magic, see Stevens' "Advanced
@@ -273,6 +286,10 @@ def main():
     os.dup2(si.fileno(), sys.stdin.fileno())
     os.dup2(so.fileno(), sys.stdout.fileno())
     os.dup2(se.fileno(), sys.stderr.fileno())
+
+    public_ip = resolve(public_ip)
+    private_ip = resolve(private_ip)
+    source_ip = resolve(source_ip)
 
     if action in ["stopped", "reconnect"]:
         stop_forwarding(dnat_chain, snat_chain,
